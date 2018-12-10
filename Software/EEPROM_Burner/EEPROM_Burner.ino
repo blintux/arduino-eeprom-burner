@@ -7,21 +7,22 @@
 /*
  * EEPROM content for write
  */
-const PROGMEM uint32_t data[] = {
-  'H', 'E', 'L', 'O', ' ', 'W', 'O', 'R', 'L', 'D', 
-  0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 
-  0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 
-  0x17, 0x18, 0x19, 0x20, 0x21, 0x22, 0x23, 0x24,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+
+const PROGMEM uint32_t data[] =
+{
+  'H', 'E', 'L', 'L', 'O', ' ', 'W', 'O', 'R', 'L', 'D', 
+  0xff, 0xff, 0xff, 0xff, 0xff, 0x61, 0x62, 0x63, 0x64, 
+  0x65, 0x66, 0x67, 0x68, 0x20, 0x30, 0x31, 0x32, 0x33
+  
 };
 
 /*
  * EEPROM settings
  */
 const int write_start = 0;          // Write start address
-const int read_start  = 256;          // Read start address
-const int read_end    = 512;        // Read end address
-const int erase_end   = 512;        // Erase end address
+const int read_start  = 0;          // Read start address
+const int read_end    = 511;        // Read end address
+const int erase_end   = 511;        // Erase end address
 
 /*
  * *********************************************************************************
@@ -45,7 +46,8 @@ int shift;
 /*
  * Set EEPROM Address
  */
-void setAddress(int address, bool outputEnable) {
+void setAddress(int address, bool outputEnable)
+{
   shiftOut(SHIFT_DATA, SHIFT_CLK, MSBFIRST, (address >> 8) | (outputEnable ? 0x00 : 0x80));
   shiftOut(SHIFT_DATA, SHIFT_CLK, MSBFIRST, address);
 
@@ -57,16 +59,20 @@ void setAddress(int address, bool outputEnable) {
 /*
  * Write a byte to the EEPROM at the specified address.
  */
-void writeEEPROM(int address, byte data) {
+void writeEEPROM(int address, byte data)
+{
   setAddress(address, /*outputEnable*/ false);
-  for (int pin = EEPROM_D0; pin <= EEPROM_D7; pin += 1) {
+  for (int pin = EEPROM_D0; pin <= EEPROM_D7; pin += 1)
+  {
     pinMode(pin, OUTPUT);
   }
 
-  for (int pin = EEPROM_D0; pin <= EEPROM_D7; pin += 1) {
+  for (int pin = EEPROM_D0; pin <= EEPROM_D7; pin += 1)
+  {
     digitalWrite(pin, data & 1);
     data = data >> 1;
   }
+  
   digitalWrite(WRITE_EN, LOW);
   delayMicroseconds(1);
   digitalWrite(WRITE_EN, HIGH);
@@ -76,23 +82,29 @@ void writeEEPROM(int address, byte data) {
 /*
  * Read a byte from the EEPROM at the specified address.
  */
-byte readEEPROM(int address) {
-  for (int pin = EEPROM_D0; pin <= EEPROM_D7; pin += 1) {
+byte readEEPROM(int address)
+{
+  for (int pin = EEPROM_D0; pin <= EEPROM_D7; pin += 1)
+  {
     pinMode(pin, INPUT);
   }
-  setAddress(address, /*outputEnable*/ true);
+  
+  setAddress(address, true);
 
   byte data = 0;
-  for (int pin = EEPROM_D7; pin >= EEPROM_D0; pin -= 1) {
+  for (int pin = EEPROM_D7; pin >= EEPROM_D0; pin -= 1)
+  {
     data = (data << 1) + digitalRead(pin);
   }
+  
   return data;
 }
 
 /*
  * Init the EEPROM Writer
  */
-void setup() {
+void setup()
+{
   pinMode(SHIFT_DATA, OUTPUT);
   pinMode(SHIFT_CLK, OUTPUT);
   pinMode(SHIFT_LATCH, OUTPUT);
@@ -107,55 +119,69 @@ void setup() {
 /*
  * Program loop
  */
-void loop() {
-  if (Serial.available() > 0) {
+void loop()
+{
+  if (Serial.available() > 0)
+  {
     command = Serial.read();
 
-    switch (command) {
-      
+    switch (command)
+    {  
       //Erase EEPROM
       case 'e':
         Serial.print("Erasing EEPROM .");
         
-        for (int address = 0; address <= erase_end; address += 1) {
-          writeEEPROM(address, 0xff);
-          if (address % 64 == 0) Serial.print(".");
+        for (int addr = 0; addr <= erase_end; addr += 1)
+        {
+          writeEEPROM(addr, 0xff);
+          if (addr % 64 == 0) Serial.print(".");
         }
 
         Serial.print(" Done!\n\n");
-      break;
+        break;
 
       //Read EEPROM
       case 'r':
         Serial.print("Reading EEPROM ... \n\n");
-      
-        for (int base = read_start; base <= read_end; base += 16) {
+     
+        for (int base = read_start; base <= read_end; base += 16)
+        {
           byte data[16];
-          for (int offset = 0; offset <= 15; offset += 1) {
+          char hex_buf[80];
+          String str_buf;
+          
+          for (int offset = 0; offset <= 15; offset += 1)
+          {
             data[offset] = readEEPROM(base + offset);
           }
-      
-          char buf[80];
-          sprintf(buf, "%03x:  %02x %02x %02x %02x %02x %02x %02x %02x   %02x %02x %02x %02x %02x %02x %02x %02x",
-                  base, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
-                  data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15]);
-      
-          Serial.println(buf);
+
+          for (char c : data)
+          {
+            str_buf += (c >= ' ' && c < 128) ? c : '.';
+          }
+
+          sprintf(hex_buf, "%03x:  %02x %02x %02x %02x %02x %02x %02x %02x   %02x %02x %02x %02x %02x %02x %02x %02x   ",
+                  base, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9], 
+                  data[10], data[11], data[12], data[13], data[14], data[15]);
+          
+          Serial.print(hex_buf);
+          Serial.println(str_buf);
         }
-      break;
+
+        break;
 
       // Write all EEPROM
       case 'w':
         Serial.print("Writeing EEPROM .");
 
-        for (int address = 0; address < sizeof(data)/sizeof( pgm_read_dword(data) ); address += 1) {
-          writeEEPROM(address + write_start, pgm_read_dword(data + address) );
-          if (address % 64 == 0) Serial.print(".");
+        for (int addr = 0; addr < sizeof(data)/sizeof( pgm_read_dword(data) ); addr += 1)
+        {
+          writeEEPROM(addr + write_start, pgm_read_dword(data + addr) );
+          if (addr % 64 == 0) Serial.print(".");
         }
 
         Serial.print(" Done!\n\n");
-      break;
-
+        break;
     }
   }
 }
